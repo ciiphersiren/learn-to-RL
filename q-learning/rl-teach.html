@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How RL Works — Code Walkthrough</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:wght@400;600;800&display=swap');
+:root {
+  --bg:#0d0d0d;--surface:#141414;--surface2:#1a1a1a;--border:#252525;
+  --text:#e8e8e8;--muted:#555;--green:#4ade80;--blue:#60a5fa;
+  --orange:#fb923c;--pink:#f472b6;--yellow:#fbbf24;--purple:#a78bfa;--red:#f87171;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Bricolage Grotesque',sans-serif;min-height:100vh;}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:100;}
+.topbar h1{font-size:1rem;font-weight:800;letter-spacing:-0.5px;}
+.topbar h1 em{color:var(--green);font-style:normal;}
+.chapter-nav{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+.chapter-btn{font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:5px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:4px;transition:all .2s;}
+.chapter-btn:hover{color:var(--text);border-color:var(--text);}
+.chapter-btn.active{background:var(--surface2);color:var(--green);border-color:var(--green);}
+.layout{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 57px);}
+.explain-pane{overflow-y:auto;padding:32px 28px;border-right:1px solid var(--border);}
+.chapter{display:none;}
+.chapter.active{display:block;}
+.chapter h2{font-size:1.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;line-height:1.2;}
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:2px 8px;border-radius:3px;margin-bottom:16px;letter-spacing:1px;}
+.tag.rl{background:rgba(74,222,128,.1);color:var(--green);}
+.tag.viz{background:rgba(96,165,250,.1);color:var(--blue);}
+.tag.core{background:rgba(251,146,60,.1);color:var(--orange);}
+p{font-size:.88rem;line-height:1.75;color:#bbb;margin-bottom:14px;}
+p strong{color:var(--text);}
+p em{color:var(--yellow);font-style:normal;}
+.g{color:var(--green);}.b{color:var(--blue);}.o{color:var(--orange);}.pk{color:var(--pink);}.pu{color:var(--purple);}
+.callout{border-left:3px solid var(--green);background:rgba(74,222,128,.05);padding:12px 16px;margin:16px 0;border-radius:0 6px 6px 0;font-size:.83rem;line-height:1.6;color:#aaa;}
+.callout.blue{border-color:var(--blue);background:rgba(96,165,250,.05);}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.05);}
+.callout.pink{border-color:var(--pink);background:rgba(244,114,182,.05);}
+.callout strong{color:var(--text);display:block;margin-bottom:4px;font-size:.75rem;letter-spacing:1px;text-transform:uppercase;}
+.formula{font-family:'JetBrains Mono',monospace;font-size:.78rem;background:var(--surface);border:1px solid var(--border);padding:14px 18px;margin:16px 0;border-radius:6px;line-height:2;}
+.nav-btns{display:flex;gap:10px;margin-top:28px;padding-top:20px;border-top:1px solid var(--border);}
+.nav-btn{font-family:'JetBrains Mono',monospace;font-size:.7rem;padding:9px 18px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;border-radius:4px;transition:all .15s;letter-spacing:.5px;}
+.nav-btn:hover{border-color:var(--green);color:var(--green);}
+.nav-btn.next{background:var(--green);color:#000;border-color:var(--green);font-weight:700;}
+.nav-btn.next:hover{background:#6ee7a0;}
+.nav-btn.bluebtn{background:var(--blue);color:#000;border-color:var(--blue);font-weight:700;}
+.code-pane{display:flex;flex-direction:column;overflow:hidden;background:#0a0a0a;}
+.code-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;}
+.code-tab{font-family:'JetBrains Mono',monospace;font-size:.65rem;padding:8px 14px;border:none;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s;}
+.code-tab:hover{color:var(--text);}
+.code-tab.active{color:var(--text);border-bottom-color:var(--green);}
+.code-scroll{flex:1;overflow-y:auto;padding:20px 0;}
+pre{font-family:'JetBrains Mono',monospace;font-size:.72rem;line-height:1.75;padding:0 20px;white-space:pre;}
+.live-demo{border-top:1px solid var(--border);padding:14px 18px;background:var(--surface);}
+.live-demo h4{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
+#mini-canvas-wrap{display:flex;gap:16px;align-items:flex-start;}
+canvas#mini-canvas{border:1px solid var(--border);}
+.mini-info{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);line-height:1.8;white-space:pre;}
+.val{color:var(--green);}.val.orange{color:var(--orange);}.val.blue{color:var(--blue);}
+.progress{display:flex;gap:6px;align-items:center;margin-left:8px;}
+.pdot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:background .3s;}
+.pdot.done{background:var(--green);}.pdot.current{background:var(--yellow);}
+/* syntax colors — used inside template tags */
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}
+.cm{color:#546e7a;font-style:italic}.vr{color:#eeffff}.key{color:#ffcb6b}.op{color:#89ddff}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>HOW RL WORKS — <em>CODE WALKTHROUGH</em></h1>
+  <div class="chapter-nav" id="chapter-nav"></div>
+  <div class="progress" id="progress-dots"></div>
+</div>
+
+<div class="layout">
+  <div class="explain-pane">
+
+    <div class="chapter" id="ch0">
+      <div class="tag rl">CHAPTER 1 / 6 &middot; THE BIG PICTURE</div>
+      <h2>What even IS<br>reinforcement learning?</h2>
+      <p>Forget the math for a second. RL is literally just this: <strong>an agent tries stuff, gets punished or rewarded, and gradually learns what to do.</strong> Same way a dog learns tricks.</p>
+      <div class="callout">
+        <strong>The 3 things every RL system needs</strong>
+        An <em>environment</em> (the world), an <em>agent</em> (the learner), and a <em>reward signal</em> (feedback). Everything else is math on top of this.
+      </div>
+      <p>In the playground, the <strong class="g">environment</strong> is the grid. The <strong class="b">agent</strong> is the yellow circle. The <strong class="o">reward</strong> is +10 for the goal, &minus;5 for traps, &minus;0.05 per step.</p>
+      <p>The agent starts <strong>knowing absolutely nothing.</strong> It doesn&rsquo;t know where the goal is. It doesn&rsquo;t know walls exist. It just&hellip; tries things. And slowly, through thousands of tiny updates, it learns.</p>
+      <div class="callout blue">
+        <strong>Why not just hardcode the path?</strong>
+        You could &mdash; but it only works for THIS grid. RL agents learn a <em>general policy</em> that works even when the environment changes. That&rsquo;s the superpower.
+      </div>
+      <p>The algorithm used is called <strong>Q-Learning</strong>. &ldquo;Q&rdquo; stands for &ldquo;quality&rdquo; &mdash; it learns how good each action is in each state.</p>
+      <div class="nav-btns">
+        <button class="nav-btn next" onclick="goChapter(1)">Next: The Environment &rarr;</button>
+      </div>
+    </div>
+
+    <div class="chapter" id="ch1">
+      <div class="tag rl">CHAPTER 2 / 6 &middot; THE ENVIRONMENT</div>
+      <h2>Building the world<br>the agent lives in</h2>
+      <p>Every RL system needs a world. In code it&rsquo;s just <strong>a data structure that describes states, allows actions, and returns rewards.</strong></p>
+      <div class="callout">
+        <strong>Grid cell values</strong>
+        <span class="g">0</span> = walkable &nbsp;|&nbsp; <span class="o">1</span> = wall &nbsp;|&nbsp; <span class="pk">2</span> = goal (+10) &nbsp;|&nbsp; <span style="color:var(--red)">3</span> = trap (&minus;5)
+      </div>
+      <p>The agent&rsquo;s <strong>state</strong> is just its position: row and column. That&rsquo;s the entire state space. It can take <strong>4 actions</strong>: up, down, left, right, encoded as [&Delta;row, &Delta;col].</p>
+      <div class="callout orange">
+        <strong>What happens each step</strong>
+        Pick action &rarr; compute new position &rarr; wall? stay put (&minus;0.5) &rarr; goal? +10, done &rarr; trap? &minus;5, done &rarr; otherwise &minus;0.05, continue.
+      </div>
+      <p>The <strong class="b">reward function is the most critical design decision in RL.</strong> The &minus;0.05 step penalty makes the agent want to reach the goal <em>fast</em>, not just eventually.</p>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="goChapter(0)">&larr; Back</button>
+        <button class="nav-btn next" onclick="goChapter(2)">Next: The Q-Table &rarr;</button>
+      </div>
+    </div>
+
+    <div class="chapter" id="ch2">
+      <div class="tag rl">CHAPTER 3 / 6 &middot; THE BRAIN</div>
+      <h2>The Q-Table:<br>the agent&rsquo;s memory</h2>
+      <p>We need the agent to remember <strong>&ldquo;in state S, how good is action A?&rdquo;</strong> We store this in a table called the Q-table.</p>
+      <div class="callout">
+        <strong>Q-Table structure</strong>
+        A dictionary. Key = state string (e.g. &ldquo;3,4&rdquo;). Value = array of 4 numbers [up, down, left, right]. Each number = expected total future reward from taking that action.
+      </div>
+      <p>At the start, <strong>everything is 0</strong>. As it explores, these numbers get updated to reflect reality.</p>
+      <div class="formula">
+        <span style="color:var(--muted)">// Q-table after some learning:</span><br>
+        Q[&ldquo;3,4&rdquo;] = [<span style="color:var(--orange)">-0.2</span>, <span style="color:var(--orange)">4.8</span>, <span style="color:var(--orange)">-1.1</span>, <span style="color:var(--orange)">3.2</span>]<br>
+        <span style="color:var(--muted)">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#8593;up  &#8595;down &#8592;left &#8594;right</span><br>
+        <span style="color:var(--muted)">// Best action = DOWN (4.8 is highest)</span>
+      </div>
+      <p>The arrows on the grid <em>are literally the Q-table</em>. Loop every cell, find the highest Q-value, draw the matching arrow. That&rsquo;s the whole visualization.</p>
+      <div class="callout blue">
+        <strong>Key insight</strong>
+        The Q-table is NOT a neural network. It&rsquo;s a plain JavaScript object. Q-learning is elegant because it&rsquo;s just <em>a fancy way to update a lookup table.</em>
+      </div>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="goChapter(1)">&larr; Back</button>
+        <button class="nav-btn next" onclick="goChapter(3)">Next: The Update Rule &rarr;</button>
+      </div>
+    </div>
+
+    <div class="chapter" id="ch3">
+      <div class="tag core">CHAPTER 4 / 6 &middot; THE MATH</div>
+      <h2>The Q-Learning<br>update rule</h2>
+      <p>After every single step, we run this formula. <strong>This one line is what makes learning happen.</strong></p>
+      <div class="formula">
+        <span style="color:var(--green)">Q(s,a)</span> &larr; <span style="color:var(--green)">Q(s,a)</span> + <span style="color:var(--pink)">&alpha;</span> &times; [<span style="color:var(--yellow)">r</span> + <span style="color:var(--purple)">&gamma;</span> &times; <span style="color:var(--orange)">maxQ(s&prime;)</span> &minus; <span style="color:var(--green)">Q(s,a)</span>]<br><br>
+        <span style="color:var(--muted)">s &nbsp;= current state &nbsp;&nbsp;&nbsp;&nbsp;</span><span style="color:var(--yellow)">r &nbsp;= reward received</span><br>
+        <span style="color:var(--pink)">&alpha; = learning rate (0.2)</span><br>
+        <span style="color:var(--purple)">&gamma; = discount factor (0.95)</span><br>
+        <span style="color:var(--orange)">maxQ(s&prime;) = best Q in the NEXT state</span>
+      </div>
+      <p>The part in brackets is the <strong>TD error</strong> &mdash; how wrong was our previous estimate? We then nudge the old estimate a small step toward the truth.</p>
+      <div class="callout pink">
+        <strong>Intuition for humans</strong>
+        You think a path is worth 3 pts. You step, get &minus;0.05, and the best forward path looks worth 4 pts. Reality = &minus;0.05 + 0.95&times;4 = 3.75. You were too low! Move your estimate up toward 3.75. That&rsquo;s ALL Q-learning is.
+      </div>
+      <p><strong>Learning rate &alpha; = 0.2</strong>: move only 20% toward the new estimate. Too high &rarr; unstable. Too low &rarr; learns forever.</p>
+      <p><strong>Discount &gamma; = 0.95</strong>: rewards 10 steps away are worth 0.95&sup1;&deg; &asymp; 60%. Care about the future, but not infinitely.</p>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="goChapter(2)">&larr; Back</button>
+        <button class="nav-btn next" onclick="goChapter(4)">Next: Exploration &rarr;</button>
+      </div>
+    </div>
+
+    <div class="chapter" id="ch4">
+      <div class="tag rl">CHAPTER 5 / 6 &middot; EXPLORATION</div>
+      <h2>The explore vs exploit<br>dilemma</h2>
+      <p>If the agent only does what it currently thinks is best, it&rsquo;ll <strong>miss better paths it never tried.</strong> But if it always explores randomly, it never uses what it learned.</p>
+      <div class="callout">
+        <strong>&epsilon;-greedy rule</strong>
+        With probability <em>&epsilon;</em>, take a random action (explore). With probability <em>1&minus;&epsilon;</em>, take the best known action (exploit). Start &epsilon;=1.0, decay slowly to 0.05.
+      </div>
+      <p>This is why in the playground the agent starts completely random and gradually improves &mdash; <strong>&epsilon; decays from 1.0 to 0.05</strong> over episodes, shifting from pure exploration to mostly exploitation.</p>
+      <div class="callout blue">
+        <strong>The decay formula</strong>
+        After each episode: <code style="color:var(--green)">epsilon = max(0.05, epsilon * 0.992)</code><br>
+        Slowly shrinks to 0.05 and stays there &mdash; the agent never fully stops exploring.
+      </div>
+      <div class="callout orange">
+        <strong>Try it in the playground!</strong>
+        Episodes 0&ndash;30 look chaotic (high &epsilon;). By ep 100 paths look purposeful. By ep 200+ it&rsquo;s nearly optimal. The visual difference IS epsilon decay.
+      </div>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="goChapter(3)">&larr; Back</button>
+        <button class="nav-btn next" onclick="goChapter(5)">Next: The Visuals &rarr;</button>
+      </div>
+    </div>
+
+    <div class="chapter" id="ch5">
+      <div class="tag viz">CHAPTER 6 / 6 &middot; THE VISUALS</div>
+      <h2>How the animation<br>actually works</h2>
+      <p>The simulation and visuals are completely separate. <strong>The RL code just updates numbers. A rendering loop draws them.</strong></p>
+      <div class="callout blue">
+        <strong>The HTML Canvas API</strong>
+        Two layered &lt;canvas&gt; elements. Every frame we clear them and redraw everything from scratch using the current Q-table and agent position.
+      </div>
+      <p>The <strong class="g">game loop</strong> is <code style="color:var(--green)">setInterval(tick, delay)</code>. Every tick: run N RL steps &rarr; call render() &rarr; draw everything fresh. That&rsquo;s the animation.</p>
+      <p>The <strong class="b">Q-value arrows</strong>: loop every cell, read Q-values, find the max, draw that arrow character. The Q-table IS the arrows. No magic.</p>
+      <p>The <strong class="o">live charts</strong>: every episode push a value to an array. Redraw the chart canvas by mapping each array value to a pixel coordinate and drawing a line through all of them.</p>
+      <div class="callout pink">
+        <strong>The key insight about &ldquo;real-time&rdquo;</strong>
+        No streaming. No websockets. Just: run RL step &rarr; push to array &rarr; redraw chart. Everything in one browser tab. The live feeling is just drawing very fast.
+      </div>
+      <div class="callout">
+        <strong>The full stack</strong>
+        HTML + CSS + vanilla JavaScript. No frameworks, no libraries, no backend. The entire RL agent + visualization is ~200 lines of JS.
+      </div>
+      <div class="nav-btns">
+        <button class="nav-btn" onclick="goChapter(4)">&larr; Back</button>
+        <button class="nav-btn bluebtn" onclick="goChapter(0)">&#8635; Back to Start</button>
+      </div>
+    </div>
+
+  </div><!-- end explain-pane -->
+
+  <div class="code-pane">
+    <div class="code-tabs" id="code-tabs"></div>
+    <div class="code-scroll"><pre id="code-block"></pre></div>
+    <div class="live-demo">
+      <h4>&#9654; LIVE &mdash; watch it as you read</h4>
+      <div id="mini-canvas-wrap">
+        <canvas id="mini-canvas" width="120" height="120"></canvas>
+        <div class="mini-info" id="mini-info">loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  CODE SNIPPETS stored in <template> tags.
+  The HTML parser ignores their contents, so class= attributes
+  inside them never cause JS syntax errors.
+  JS reads them via template.innerHTML after page load.
+-->
+
+<template id="code-ch0-t0"><span class="cm">// RL in its simplest possible form:</span>
+<span class="cm">// Agent + Environment + Reward = Learning</span>
+
+<span class="kw">while</span> (<span class="vr">agent</span>.<span class="fn">notDone</span>()) {
+
+  <span class="cm">// 1. Agent observes the world</span>
+  <span class="kw">const</span> <span class="vr">state</span>  <span class="op">=</span> <span class="vr">environment</span>.<span class="fn">getState</span>();
+
+  <span class="cm">// 2. Agent decides what to do</span>
+  <span class="kw">const</span> <span class="vr">action</span> <span class="op">=</span> <span class="vr">agent</span>.<span class="fn">chooseAction</span>(<span class="vr">state</span>);
+
+  <span class="cm">// 3. World reacts to that action</span>
+  <span class="kw">const</span> <span class="vr">reward</span> <span class="op">=</span> <span class="vr">environment</span>.<span class="fn">step</span>(<span class="vr">action</span>);
+
+  <span class="cm">// 4. Agent learns from what happened</span>
+  <span class="vr">agent</span>.<span class="fn">learn</span>(<span class="vr">state</span>, <span class="vr">action</span>, <span class="vr">reward</span>);
+
+}
+
+<span class="cm">// That's literally it.</span>
+<span class="cm">// Everything else is just the details of HOW</span>
+<span class="cm">// the agent chooses actions and updates Q.</span></template>
+
+<template id="code-ch1-t0"><span class="cm">// 0=empty  1=wall  2=goal  3=trap</span>
+<span class="kw">const</span> <span class="vr">GRID</span> <span class="op">=</span> [
+  [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>],
+  [<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>],
+  [<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>],
+  [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">3</span>,<span class="num">1</span>,<span class="num">0</span>],  <span class="cm">// trap at [3,4]</span>
+  [<span class="num">1</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>],
+  [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">1</span>,<span class="num">1</span>,<span class="num">3</span>,<span class="num">0</span>],  <span class="cm">// trap at [5,5]</span>
+  [<span class="num">0</span>,<span class="num">1</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">2</span>],  <span class="cm">// goal at [6,6]</span>
+];
+
+<span class="cm">// 4 actions = [delta_row, delta_col]</span>
+<span class="kw">const</span> <span class="vr">ACTIONS</span> <span class="op">=</span> [
+  [<span class="num">-1</span>, <span class="num">0</span>],  <span class="cm">// up</span>
+  [<span class="num">+1</span>, <span class="num">0</span>],  <span class="cm">// down</span>
+  [<span class="num"> 0</span>,<span class="num">-1</span>],  <span class="cm">// left</span>
+  [<span class="num"> 0</span>,<span class="num">+1</span>],  <span class="cm">// right</span>
+];
+
+<span class="cm">// The step function — environment reacts</span>
+<span class="kw">function</span> <span class="fn">step</span>(<span class="vr">agentR</span>, <span class="vr">agentC</span>, <span class="vr">action</span>) {
+  <span class="kw">const</span> [<span class="vr">dr</span>, <span class="vr">dc</span>] <span class="op">=</span> <span class="vr">ACTIONS</span>[<span class="vr">action</span>];
+  <span class="kw">const</span> <span class="vr">nr</span> <span class="op">=</span> <span class="vr">agentR</span> <span class="op">+</span> <span class="vr">dr</span>;
+  <span class="kw">const</span> <span class="vr">nc</span> <span class="op">=</span> <span class="vr">agentC</span> <span class="op">+</span> <span class="vr">dc</span>;
+
+  <span class="cm">// Hit a wall? Stay put, small penalty</span>
+  <span class="kw">if</span> (<span class="fn">isWall</span>(<span class="vr">nr</span>, <span class="vr">nc</span>)) {
+    <span class="kw">return</span> { <span class="key">pos</span>: [<span class="vr">agentR</span>,<span class="vr">agentC</span>], <span class="key">reward</span>: <span class="num">-0.5</span>, <span class="key">done</span>: <span class="kw">false</span> };
+  }
+
+  <span class="kw">let</span> <span class="vr">reward</span> <span class="op">=</span> <span class="num">-0.05</span>;  <span class="cm">// default: small step cost</span>
+  <span class="kw">let</span> <span class="vr">done</span>   <span class="op">=</span> <span class="kw">false</span>;
+
+  <span class="kw">if</span> (<span class="vr">GRID</span>[<span class="vr">nr</span>][<span class="vr">nc</span>] <span class="op">===</span> <span class="num">2</span>) { <span class="vr">reward</span> <span class="op">=</span> <span class="num">+10</span>; <span class="vr">done</span> <span class="op">=</span> <span class="kw">true</span>; } <span class="cm">// goal</span>
+  <span class="kw">if</span> (<span class="vr">GRID</span>[<span class="vr">nr</span>][<span class="vr">nc</span>] <span class="op">===</span> <span class="num">3</span>) { <span class="vr">reward</span> <span class="op">=</span>  <span class="num">-5</span>; <span class="vr">done</span> <span class="op">=</span> <span class="kw">true</span>; } <span class="cm">// trap</span>
+
+  <span class="kw">return</span> { <span class="key">pos</span>: [<span class="vr">nr</span>,<span class="vr">nc</span>], <span class="vr">reward</span>, <span class="vr">done</span> };
+}</template>
+
+<template id="code-ch2-t0"><span class="cm">// The Q-table is just a JS object</span>
+<span class="kw">let</span> <span class="vr">Q</span> <span class="op">=</span> {};
+
+<span class="cm">// Convert [row,col] to a string key</span>
+<span class="cm">// (arrays can't be object keys directly)</span>
+<span class="kw">function</span> <span class="fn">qKey</span>(<span class="vr">r</span>, <span class="vr">c</span>) {
+  <span class="kw">return</span> <span class="vr">r</span> <span class="op">+</span> <span class="str">','</span> <span class="op">+</span> <span class="vr">c</span>;   <span class="cm">// e.g. "3,4"</span>
+}
+
+<span class="cm">// Get Q-value — 0 for unseen states</span>
+<span class="kw">function</span> <span class="fn">getQ</span>(<span class="vr">r</span>, <span class="vr">c</span>, <span class="vr">a</span>) {
+  <span class="kw">const</span> <span class="vr">k</span> <span class="op">=</span> <span class="fn">qKey</span>(<span class="vr">r</span>, <span class="vr">c</span>);
+  <span class="kw">if</span> (<span class="op">!</span><span class="vr">Q</span>[<span class="vr">k</span>]) <span class="vr">Q</span>[<span class="vr">k</span>] <span class="op">=</span> [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>];
+  <span class="kw">return</span> <span class="vr">Q</span>[<span class="vr">k</span>][<span class="vr">a</span>];
+}
+
+<span class="cm">// Set Q-value</span>
+<span class="kw">function</span> <span class="fn">setQ</span>(<span class="vr">r</span>, <span class="vr">c</span>, <span class="vr">a</span>, <span class="vr">val</span>) {
+  <span class="kw">const</span> <span class="vr">k</span> <span class="op">=</span> <span class="fn">qKey</span>(<span class="vr">r</span>, <span class="vr">c</span>);
+  <span class="kw">if</span> (<span class="op">!</span><span class="vr">Q</span>[<span class="vr">k</span>]) <span class="vr">Q</span>[<span class="vr">k</span>] <span class="op">=</span> [<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>,<span class="num">0</span>];
+  <span class="vr">Q</span>[<span class="vr">k</span>][<span class="vr">a</span>] <span class="op">=</span> <span class="vr">val</span>;
+}
+
+<span class="cm">// What Q looks like after some learning:</span>
+<span class="cm">// Q = {</span>
+<span class="cm">//   "0,0": [-0.1, 2.3, -0.5, 1.8], best: DOWN</span>
+<span class="cm">//   "1,0": [ 0.0, 4.1, -0.2, 0.8], best: DOWN</span>
+<span class="cm">//   "2,0": [ 0.0, 6.2, -0.1, 0.3], best: DOWN</span>
+<span class="cm">// }</span>
+<span class="cm">// The grid arrows visualize exactly this!</span></template>
+
+<template id="code-ch3-t0"><span class="kw">const</span> <span class="vr">ALPHA</span> <span class="op">=</span> <span class="num">0.2</span>;   <span class="cm">// learning rate</span>
+<span class="kw">const</span> <span class="vr">GAMMA</span> <span class="op">=</span> <span class="num">0.95</span>;  <span class="cm">// discount factor</span>
+
+<span class="kw">function</span> <span class="fn">updateQ</span>(<span class="vr">s</span>, <span class="vr">a</span>, <span class="vr">reward</span>, <span class="vr">sNext</span>, <span class="vr">done</span>) {
+
+  <span class="cm">// What did we think this was worth?</span>
+  <span class="kw">const</span> <span class="vr">currentQ</span> <span class="op">=</span> <span class="fn">getQ</span>(<span class="vr">s</span>[<span class="num">0</span>], <span class="vr">s</span>[<span class="num">1</span>], <span class="vr">a</span>);
+
+  <span class="cm">// Best Q reachable from the next state</span>
+  <span class="cm">// (0 if episode just ended - no future)</span>
+  <span class="kw">const</span> <span class="vr">nextMax</span> <span class="op">=</span> <span class="vr">done</span> ? <span class="num">0</span>
+    : <span class="vr">Math</span>.<span class="fn">max</span>(...[<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>].<span class="fn">map</span>(<span class="vr">na</span> <span class="op">=&gt;</span> <span class="fn">getQ</span>(<span class="vr">sNext</span>[<span class="num">0</span>], <span class="vr">sNext</span>[<span class="num">1</span>], <span class="vr">na</span>)));
+
+  <span class="cm">// Target = what SHOULD the Q value be?</span>
+  <span class="kw">const</span> <span class="vr">target</span>  <span class="op">=</span> <span class="vr">reward</span> <span class="op">+</span> <span class="vr">GAMMA</span> <span class="op">*</span> <span class="vr">nextMax</span>;
+
+  <span class="cm">// TD error = how wrong were we?</span>
+  <span class="kw">const</span> <span class="vr">tdError</span> <span class="op">=</span> <span class="vr">target</span> <span class="op">-</span> <span class="vr">currentQ</span>;
+
+  <span class="cm">// Nudge old value a small step toward truth</span>
+  <span class="kw">const</span> <span class="vr">newQ</span>    <span class="op">=</span> <span class="vr">currentQ</span> <span class="op">+</span> <span class="vr">ALPHA</span> <span class="op">*</span> <span class="vr">tdError</span>;
+
+  <span class="fn">setQ</span>(<span class="vr">s</span>[<span class="num">0</span>], <span class="vr">s</span>[<span class="num">1</span>], <span class="vr">a</span>, <span class="vr">newQ</span>);
+}
+
+<span class="cm">// Concrete walkthrough:</span>
+<span class="cm">// currentQ = 2.0   we thought it was worth 2</span>
+<span class="cm">// reward   = -0.05 paid the step cost</span>
+<span class="cm">// nextMax  = 5.0   best from next cell</span>
+<span class="cm">// target   = -0.05 + 0.95 * 5.0 = 4.70</span>
+<span class="cm">// tdError  = 4.70 - 2.0         = +2.70</span>
+<span class="cm">// newQ     = 2.0  + 0.2 * 2.70  = 2.54</span></template>
+
+<template id="code-ch4-t0"><span class="kw">let</span> <span class="vr">epsilon</span>    <span class="op">=</span> <span class="num">1.0</span>;    <span class="cm">// start: 100% random</span>
+<span class="kw">const</span> <span class="vr">EPS_DECAY</span> <span class="op">=</span> <span class="num">0.992</span>; <span class="cm">// multiply each episode</span>
+<span class="kw">const</span> <span class="vr">EPS_MIN</span>   <span class="op">=</span> <span class="num">0.05</span>;  <span class="cm">// never below 5%</span>
+
+<span class="kw">function</span> <span class="fn">chooseAction</span>(<span class="vr">r</span>, <span class="vr">c</span>) {
+
+  <span class="cm">// EXPLORE — roll the dice</span>
+  <span class="kw">if</span> (<span class="vr">Math</span>.<span class="fn">random</span>() <span class="op">&lt;</span> <span class="vr">epsilon</span>) {
+    <span class="cm">// pick a random valid direction</span>
+    <span class="kw">const</span> <span class="vr">valid</span> <span class="op">=</span> <span class="vr">ACTIONS</span>
+      .<span class="fn">map</span>((<span class="vr">a</span>,<span class="vr">i</span>) <span class="op">=&gt;</span> <span class="fn">isValid</span>(<span class="vr">r</span><span class="op">+</span><span class="vr">a</span>[<span class="num">0</span>], <span class="vr">c</span><span class="op">+</span><span class="vr">a</span>[<span class="num">1</span>]) ? <span class="vr">i</span> : <span class="num">-1</span>)
+      .<span class="fn">filter</span>(<span class="vr">i</span> <span class="op">=&gt;</span> <span class="vr">i</span> <span class="op">&gt;=</span> <span class="num">0</span>);
+    <span class="kw">return</span> <span class="vr">valid</span>[<span class="vr">Math</span>.<span class="fn">floor</span>(<span class="vr">Math</span>.<span class="fn">random</span>() <span class="op">*</span> <span class="vr">valid</span>.<span class="vr">length</span>)];
+  }
+
+  <span class="cm">// EXPLOIT — use learned knowledge</span>
+  <span class="kw">const</span> <span class="vr">qVals</span> <span class="op">=</span> [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>].<span class="fn">map</span>(<span class="vr">a</span> <span class="op">=&gt;</span> {
+    <span class="kw">const</span> [<span class="vr">dr</span>,<span class="vr">dc</span>] <span class="op">=</span> <span class="vr">ACTIONS</span>[<span class="vr">a</span>];
+    <span class="cm">// walls get -Infinity so never chosen</span>
+    <span class="kw">if</span> (<span class="op">!</span><span class="fn">isValid</span>(<span class="vr">r</span><span class="op">+</span><span class="vr">dr</span>, <span class="vr">c</span><span class="op">+</span><span class="vr">dc</span>)) <span class="kw">return</span> <span class="op">-</span><span class="vr">Infinity</span>;
+    <span class="kw">return</span> <span class="fn">getQ</span>(<span class="vr">r</span>, <span class="vr">c</span>, <span class="vr">a</span>);
+  });
+  <span class="kw">return</span> <span class="vr">qVals</span>.<span class="fn">indexOf</span>(<span class="vr">Math</span>.<span class="fn">max</span>(...<span class="vr">qVals</span>));
+}
+
+<span class="cm">// After every episode:</span>
+<span class="kw">function</span> <span class="fn">decayEpsilon</span>() {
+  <span class="vr">epsilon</span> <span class="op">=</span> <span class="vr">Math</span>.<span class="fn">max</span>(<span class="vr">EPS_MIN</span>, <span class="vr">epsilon</span> <span class="op">*</span> <span class="vr">EPS_DECAY</span>);
+}</template>
+
+<template id="code-ch5-t0"><span class="cm">// Two canvases layered on top of each other</span>
+<span class="kw">const</span> <span class="vr">canvas</span> <span class="op">=</span> <span class="vr">document</span>.<span class="fn">getElementById</span>(<span class="str">'grid-canvas'</span>);
+<span class="kw">const</span> <span class="vr">ctx</span>    <span class="op">=</span> <span class="vr">canvas</span>.<span class="fn">getContext</span>(<span class="str">'2d'</span>);
+
+<span class="cm">// THE GAME LOOP — fires every N milliseconds</span>
+<span class="fn">setInterval</span>(() <span class="op">=&gt;</span> {
+
+  <span class="cm">// 1. Run RL steps (just updates numbers)</span>
+  <span class="kw">for</span> (<span class="kw">let</span> <span class="vr">i</span> <span class="op">=</span> <span class="num">0</span>; <span class="vr">i</span> <span class="op">&lt;</span> <span class="vr">stepsPerTick</span>; <span class="vr">i</span><span class="op">++</span>) {
+    <span class="kw">const</span> <span class="vr">done</span> <span class="op">=</span> <span class="fn">rlStep</span>();
+    <span class="kw">if</span> (<span class="vr">done</span>) { <span class="fn">endEpisode</span>(); <span class="kw">break</span>; }
+  }
+
+  <span class="cm">// 2. Redraw everything from scratch</span>
+  <span class="fn">drawGrid</span>();     <span class="cm">// cells, walls, goal, traps</span>
+  <span class="fn">drawTrail</span>();    <span class="cm">// fading path behind agent</span>
+  <span class="fn">drawAgent</span>();    <span class="cm">// yellow circle</span>
+  <span class="fn">drawQArrows</span>(); <span class="cm">// arrows from Q-table</span>
+
+}, <span class="vr">delay</span>);
+
+<span class="cm">// Drawing the Q-value arrows</span>
+<span class="kw">function</span> <span class="fn">drawQArrows</span>() {
+  <span class="kw">for</span> (<span class="kw">let</span> <span class="vr">r</span> <span class="op">=</span> <span class="num">0</span>; <span class="vr">r</span> <span class="op">&lt;</span> <span class="vr">ROWS</span>; <span class="vr">r</span><span class="op">++</span>) {
+    <span class="kw">for</span> (<span class="kw">let</span> <span class="vr">c</span> <span class="op">=</span> <span class="num">0</span>; <span class="vr">c</span> <span class="op">&lt;</span> <span class="vr">COLS</span>; <span class="vr">c</span><span class="op">++</span>) {
+      <span class="kw">const</span> <span class="vr">vals</span>  <span class="op">=</span> [<span class="num">0</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>].<span class="fn">map</span>(<span class="vr">a</span> <span class="op">=&gt;</span> <span class="fn">getQ</span>(<span class="vr">r</span>,<span class="vr">c</span>,<span class="vr">a</span>));
+      <span class="kw">const</span> <span class="vr">best</span>  <span class="op">=</span> <span class="vr">vals</span>.<span class="fn">indexOf</span>(<span class="vr">Math</span>.<span class="fn">max</span>(...<span class="vr">vals</span>));
+      <span class="kw">const</span> <span class="vr">arrow</span> <span class="op">=</span> [<span class="str">'↑'</span>,<span class="str">'↓'</span>,<span class="str">'←'</span>,<span class="str">'→'</span>][<span class="vr">best</span>];
+      <span class="vr">ctx</span>.<span class="fn">fillText</span>(<span class="vr">arrow</span>, <span class="vr">cellX</span>, <span class="vr">cellY</span>);
+    }
+  }
+}</template>
+
+<template id="code-ch5-t1"><span class="cm">// This array grows as the agent plays</span>
+<span class="kw">let</span> <span class="vr">rewardHistory</span> <span class="op">=</span> [];
+
+<span class="cm">// Called when an episode ends</span>
+<span class="kw">function</span> <span class="fn">endEpisode</span>() {
+  <span class="vr">rewardHistory</span>.<span class="fn">push</span>(<span class="vr">episodeReward</span>);
+  <span class="fn">redrawChart</span>(<span class="vr">rewardHistory</span>);
+}
+
+<span class="kw">function</span> <span class="fn">redrawChart</span>(<span class="vr">data</span>) {
+  <span class="kw">const</span> <span class="vr">cv</span>  <span class="op">=</span> <span class="vr">document</span>.<span class="fn">getElementById</span>(<span class="str">'chart'</span>);
+  <span class="kw">const</span> <span class="vr">ctx</span> <span class="op">=</span> <span class="vr">cv</span>.<span class="fn">getContext</span>(<span class="str">'2d'</span>);
+  <span class="kw">const</span> <span class="vr">W</span> <span class="op">=</span> <span class="vr">cv</span>.<span class="vr">width</span>, <span class="vr">H</span> <span class="op">=</span> <span class="vr">cv</span>.<span class="vr">height</span>;
+
+  <span class="cm">// Wipe previous frame</span>
+  <span class="vr">ctx</span>.<span class="fn">clearRect</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="vr">W</span>, <span class="vr">H</span>);
+
+  <span class="cm">// Scale data to fit canvas height</span>
+  <span class="kw">const</span> <span class="vr">min</span> <span class="op">=</span> <span class="vr">Math</span>.<span class="fn">min</span>(...<span class="vr">data</span>);
+  <span class="kw">const</span> <span class="vr">max</span> <span class="op">=</span> <span class="vr">Math</span>.<span class="fn">max</span>(...<span class="vr">data</span>);
+
+  <span class="cm">// Map each value to a pixel coordinate</span>
+  <span class="vr">ctx</span>.<span class="fn">beginPath</span>();
+  <span class="vr">data</span>.<span class="fn">forEach</span>((<span class="vr">val</span>, <span class="vr">i</span>) <span class="op">=&gt;</span> {
+    <span class="kw">const</span> <span class="vr">x</span> <span class="op">=</span> (<span class="vr">i</span> <span class="op">/</span> <span class="vr">data</span>.<span class="vr">length</span>) <span class="op">*</span> <span class="vr">W</span>;
+    <span class="cm">// y is FLIPPED: canvas 0 = top</span>
+    <span class="kw">const</span> <span class="vr">y</span> <span class="op">=</span> <span class="vr">H</span> <span class="op">-</span> ((<span class="vr">val</span><span class="op">-</span><span class="vr">min</span>) <span class="op">/</span> (<span class="vr">max</span><span class="op">-</span><span class="vr">min</span>)) <span class="op">*</span> <span class="vr">H</span>;
+    <span class="vr">i</span><span class="op">===</span><span class="num">0</span> ? <span class="vr">ctx</span>.<span class="fn">moveTo</span>(<span class="vr">x</span>,<span class="vr">y</span>) : <span class="vr">ctx</span>.<span class="fn">lineTo</span>(<span class="vr">x</span>,<span class="vr">y</span>);
+  });
+
+  <span class="cm">// Draw the line — that's the whole chart!</span>
+  <span class="vr">ctx</span>.<span class="vr">strokeStyle</span> <span class="op">=</span> <span class="str">'#4ade80'</span>;
+  <span class="vr">ctx</span>.<span class="vr">lineWidth</span>   <span class="op">=</span> <span class="num">1.5</span>;
+  <span class="vr">ctx</span>.<span class="fn">stroke</span>();
+}</template>
+
+<script>
+// Chapter metadata
+const CHAPTERS = [
+  { name:'Intro',       tabs:['big_picture.js'],       tpls:['code-ch0-t0'] },
+  { name:'Environment', tabs:['environment.js'],       tpls:['code-ch1-t0'] },
+  { name:'Q-Table',     tabs:['qtable.js'],            tpls:['code-ch2-t0'] },
+  { name:'Update Rule', tabs:['q_update.js'],          tpls:['code-ch3-t0'] },
+  { name:'Exploration', tabs:['exploration.js'],       tpls:['code-ch4-t0'] },
+  { name:'Visuals',     tabs:['render.js','chart.js'], tpls:['code-ch5-t0','code-ch5-t1'] },
+];
+let curChapter = 0, curTab = 0;
+
+function buildNav() {
+  const nav  = document.getElementById('chapter-nav');
+  const dots = document.getElementById('progress-dots');
+  CHAPTERS.forEach((ch, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'chapter-btn' + (i===0?' active':'');
+    btn.textContent = (i+1)+'. '+ch.name;
+    btn.onclick = () => goChapter(i);
+    nav.appendChild(btn);
+    const dot = document.createElement('div');
+    dot.className = 'pdot'+(i===0?' current':'');
+    dot.id = 'pdot'+i;
+    dots.appendChild(dot);
+  });
+}
+
+function goChapter(n) {
+  document.getElementById('ch'+curChapter).classList.remove('active');
+  document.querySelectorAll('.chapter-btn')[curChapter].classList.remove('active');
+  document.getElementById('pdot'+curChapter).className = 'pdot done';
+  curChapter = n; curTab = 0;
+  document.getElementById('ch'+n).classList.add('active');
+  document.querySelectorAll('.chapter-btn')[n].classList.add('active');
+  document.getElementById('pdot'+n).className = 'pdot current';
+  renderCode();
+  document.querySelector('.explain-pane').scrollTop = 0;
+}
+
+function renderCode() {
+  const ch  = CHAPTERS[curChapter];
+  const tabs = document.getElementById('code-tabs');
+  const pre  = document.getElementById('code-block');
+  tabs.innerHTML = '';
+  ch.tabs.forEach((name, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'code-tab'+(i===curTab?' active':'');
+    btn.textContent = name;
+    btn.onclick = () => { curTab=i; renderCode(); };
+    tabs.appendChild(btn);
+  });
+  const tpl = document.getElementById(ch.tpls[curTab]);
+  pre.innerHTML = tpl ? tpl.innerHTML : '<span style="color:#555">// no snippet</span>';
+  document.querySelector('.code-scroll').scrollTop = 0;
+}
+
+// MINI LIVE SIMULATION
+const MINI_GRID = [[0,0,1,0],[1,0,0,0],[0,0,1,0],[0,0,0,2]];
+const MR=4,MC=4,MS=30;
+const mc=document.getElementById('mini-canvas');
+mc.width=MC*MS; mc.height=MR*MS;
+const mx=mc.getContext('2d');
+let mQ={},mR=0,mC=0,mEps=1.0,mEp=0,mTotalR=0,mSteps=0;
+const mACT=[[-1,0],[1,0],[0,-1],[0,1]];
+function mKey(r,c){return r+','+c;}
+function mGetQ(r,c,a){const k=mKey(r,c);if(!mQ[k])mQ[k]=[0,0,0,0];return mQ[k][a];}
+function mSetQ(r,c,a,v){const k=mKey(r,c);if(!mQ[k])mQ[k]=[0,0,0,0];mQ[k][a]=v;}
+function mValid(r,c){return r>=0&&r<MR&&c>=0&&c<MC&&MINI_GRID[r][c]!==1;}
+function mStep(){
+  let a;
+  if(Math.random()<mEps){
+    const valid=mACT.map((_,i)=>mValid(mR+mACT[i][0],mC+mACT[i][1])?i:-1).filter(i=>i>=0);
+    a=valid[Math.floor(Math.random()*valid.length)]??0;
+  } else {
+    const qs=mACT.map((_,i)=>mValid(mR+mACT[i][0],mC+mACT[i][1])?mGetQ(mR,mC,i):-Infinity);
+    a=qs.indexOf(Math.max(...qs));
+  }
+  const[dr,dc]=mACT[a];const nr=mR+dr,nc=mC+dc;
+  if(!mValid(nr,nc)){const oq=mGetQ(mR,mC,a);mSetQ(mR,mC,a,oq+0.2*(-0.5-oq));mTotalR-=0.5;mSteps++;}
+  else{
+    let r=-0.05,done=false;
+    if(MINI_GRID[nr][nc]===2){r=10;done=true;}
+    const oq=mGetQ(mR,mC,a);
+    const nmax=done?0:Math.max(...[0,1,2,3].map(na=>mGetQ(nr,nc,na)));
+    mSetQ(mR,mC,a,oq+0.2*(r+0.95*nmax-oq));
+    mR=nr;mC=nc;mTotalR+=r;mSteps++;
+    if(done){mEps=Math.max(0.05,mEps*0.98);mR=0;mC=0;mEp++;mTotalR=0;mSteps=0;}
+  }
+  if(mSteps>50){mEps=Math.max(0.05,mEps*0.98);mR=0;mC=0;mEp++;mTotalR=0;mSteps=0;}
+}
+function mDraw(){
+  mx.clearRect(0,0,mc.width,mc.height);
+  for(let r=0;r<MR;r++)for(let c=0;c<MC;c++){
+    const x=c*MS,y=r*MS,t=MINI_GRID[r][c];
+    mx.fillStyle=t===1?'#1a1a28':t===2?'#0d2010':'#111119';
+    mx.fillRect(x,y,MS,MS);
+    mx.strokeStyle='#252525';mx.lineWidth=1;mx.strokeRect(x,y,MS,MS);
+    if(t===2){mx.fillStyle='#4ade80';mx.font='14px serif';mx.textAlign='center';mx.textBaseline='middle';mx.fillText('\u2605',x+MS/2,y+MS/2);}
+    const k=mKey(r,c);
+    if(mQ[k]&&mEp>3){
+      const vals=mQ[k],best=vals.indexOf(Math.max(...vals));
+      if(Math.max(...vals)>0.1){mx.fillStyle='rgba(74,222,128,0.85)';mx.font='13px serif';mx.textAlign='center';mx.textBaseline='middle';mx.fillText(['\u2191','\u2193','\u2190','\u2192'][best],x+MS/2,y+MS/2);}
+    }
+  }
+  mx.fillStyle='#fbbf24';mx.beginPath();mx.arc(mC*MS+MS/2,mR*MS+MS/2,MS*0.28,0,Math.PI*2);mx.fill();
+  document.getElementById('mini-info').innerHTML=
+    'episode <span class="val">'+mEp+'</span>\n'+
+    'step    <span class="val">'+mSteps+'</span>\n'+
+    '\u03b5       <span class="val" style="color:#fb923c">'+mEps.toFixed(2)+'</span>\n'+
+    'reward  <span class="val" style="color:#60a5fa">'+mTotalR.toFixed(1)+'</span>\n\n'+
+    '<span style="color:#444">Q['+mR+','+mC+']:\n'+
+    '\u2191'+mGetQ(mR,mC,0).toFixed(2)+' \u2193'+mGetQ(mR,mC,1).toFixed(2)+'\n'+
+    '\u2190'+mGetQ(mR,mC,2).toFixed(2)+' \u2192'+mGetQ(mR,mC,3).toFixed(2)+'</span>';
+}
+setInterval(()=>{for(let i=0;i<2;i++)mStep();mDraw();},80);
+
+// Init
+buildNav();
+document.getElementById('ch0').classList.add('active');
+renderCode();
+</script>
+</body>
+</html>

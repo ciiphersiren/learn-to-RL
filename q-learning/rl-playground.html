@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL Visual Playground</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #12121a;
+    --border: #1e1e2e;
+    --accent: #7fff6e;
+    --accent2: #ff6b6b;
+    --accent3: #6ec6ff;
+    --text: #e0e0f0;
+    --muted: #555570;
+    --agent: #ffd166;
+    --wall: #1e1e2e;
+    --goal: #7fff6e;
+    --trap: #ff6b6b;
+    --empty: #151520;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    padding: 20px 30px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  #stage-badge {
+    font-size: 0.65rem;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--border);
+    color: var(--accent3);
+    border: 1px solid var(--accent3);
+    transition: all 0.5s;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    height: calc(100vh - 65px);
+  }
+
+  /* LEFT: env + controls */
+  .env-section {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+  }
+
+  #grid-wrap {
+    position: relative;
+  }
+
+  canvas#grid-canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* Q-value overlay */
+  #q-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .ctrl-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+  }
+
+  button {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 8px 18px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { border-color: var(--accent); color: var(--accent); background: rgba(127,255,110,0.07); }
+  button.primary:hover { background: rgba(127,255,110,0.15); }
+  button.danger { border-color: var(--accent2); color: var(--accent2); }
+  button.danger:hover { background: rgba(255,107,107,0.1); }
+
+  .speed-row {
+    display: flex; gap: 8px; align-items: center; font-size: 0.65rem; color: var(--muted);
+  }
+
+  input[type=range] {
+    accent-color: var(--accent);
+    width: 120px;
+  }
+
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .stat span { color: var(--text); font-weight: 700; }
+
+  /* RIGHT: charts + info */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+  }
+
+  .panel-block {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-block h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  canvas.chart {
+    width: 100%;
+    height: 90px;
+    display: block;
+  }
+
+  /* Concept explainer */
+  .concept {
+    font-size: 0.65rem;
+    line-height: 1.7;
+    color: var(--muted);
+  }
+
+  .concept strong { color: var(--accent3); }
+
+  .epsilon-bar-wrap {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  #epsilon-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent3), var(--accent));
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  /* Agent trail on canvas handled in JS */
+
+  .legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  #thought-bubble {
+    font-size: 0.65rem;
+    color: var(--accent3);
+    min-height: 30px;
+    font-style: italic;
+    text-align: center;
+    transition: opacity 0.3s;
+  }
+
+  .highlight { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RL PLAYGROUND</h1>
+  <div id="stage-badge">NOT STARTED</div>
+  <div style="margin-left:auto; font-size:0.6rem; color:var(--muted)">Q-LEARNING · GRID WORLD</div>
+</header>
+
+<div class="main">
+  <div class="env-section">
+    <div id="thought-bubble">Press START to watch the agent learn...</div>
+
+    <div id="grid-wrap">
+      <canvas id="grid-canvas"></canvas>
+      <canvas id="q-overlay"></canvas>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat">EP <span id="ep-num">0</span></div>
+      <div class="stat">STEP <span id="step-num">0</span></div>
+      <div class="stat">REWARD <span id="ep-reward">0</span></div>
+      <div class="stat">ε <span id="eps-val">1.00</span></div>
+    </div>
+
+    <div class="controls">
+      <div class="ctrl-row">
+        <button class="primary" id="btn-start">▶ START</button>
+        <button id="btn-pause">⏸ PAUSE</button>
+        <button class="danger" id="btn-reset">↺ RESET</button>
+      </div>
+      <div class="speed-row">
+        SPEED
+        <input type="range" id="speed-slider" min="1" max="10" value="4">
+        <span id="speed-label">4x</span>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:#ffd166"></div>AGENT</div>
+        <div class="legend-item"><div class="dot" style="background:#7fff6e"></div>GOAL (+10)</div>
+        <div class="legend-item"><div class="dot" style="background:#ff6b6b"></div>TRAP (−5)</div>
+        <div class="legend-item"><div class="dot" style="background:#1e1e2e"></div>WALL</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+
+    <div class="panel-block">
+      <h3>Reward per Episode</h3>
+      <canvas class="chart" id="chart-reward"></canvas>
+    </div>
+
+    <div class="panel-block">
+      <h3>Steps to Goal</h3>
+      <canvas class="chart" id="chart-steps"></canvas>
+    </div>
+
+    <div class="panel-block">
+      <h3>Exploration (ε-greedy)</h3>
+      <p class="concept" style="margin-bottom:6px">
+        <strong>ε = <span id="eps-big">1.00</span></strong> — probability of random action<br>
+        High ε = exploring. Low ε = exploiting what it learned.
+      </p>
+      <div class="epsilon-bar-wrap"><div id="epsilon-bar" style="width:100%"></div></div>
+    </div>
+
+    <div class="panel-block">
+      <h3>What's Happening Now</h3>
+      <div class="concept" id="concept-text">
+        The agent starts knowing <strong>nothing</strong>. It will take random actions and slowly build a <strong>Q-table</strong> — a lookup of "how good is action A in state S?"
+      </div>
+    </div>
+
+    <div class="panel-block">
+      <h3>Q-Learning Formula</h3>
+      <div class="concept">
+        <strong style="color:var(--accent)">Q(s,a) ← Q(s,a) + α[r + γ·max Q(s') − Q(s,a)]</strong><br><br>
+        <strong>α</strong> = learning rate (how fast to update)<br>
+        <strong>γ</strong> = discount (value future rewards)<br>
+        <strong>r</strong> = reward just received<br>
+        <strong>s'</strong> = next state after action
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── GRID DEFINITION ───────────────────────────────────────────────────────
+// 0=empty, 1=wall, 2=goal, 3=trap
+const GRID = [
+  [0,0,0,1,0,0,0],
+  [0,1,0,1,0,1,0],
+  [0,1,0,0,0,1,0],
+  [0,0,0,1,3,1,0],
+  [1,1,0,0,0,0,0],
+  [0,0,0,1,1,3,0],
+  [0,1,0,0,0,0,2],
+];
+const ROWS = GRID.length, COLS = GRID[0].length;
+const START = [0, 0];
+const GOAL = [6, 6];
+const ACTIONS = [[-1,0],[1,0],[0,-1],[0,1]]; // up down left right
+const ACTION_NAMES = ['↑','↓','←','→'];
+const CELL = 56;
+
+// ─── Q-TABLE ───────────────────────────────────────────────────────────────
+let Q = {};
+function qKey(r, c) { return `${r},${c}`; }
+function getQ(r, c, a) {
+  const k = qKey(r, c);
+  if (!Q[k]) Q[k] = [0,0,0,0];
+  return Q[k][a];
+}
+function setQ(r, c, a, val) {
+  const k = qKey(r, c);
+  if (!Q[k]) Q[k] = [0,0,0,0];
+  Q[k][a] = val;
+}
+
+// ─── HYPERPARAMS ───────────────────────────────────────────────────────────
+const ALPHA = 0.2;   // learning rate
+const GAMMA = 0.95;  // discount
+let epsilon = 1.0;
+const EPS_DECAY = 0.992;
+const EPS_MIN = 0.05;
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let agentR = START[0], agentC = START[1];
+let episode = 0, stepCount = 0, epReward = 0;
+let running = false, paused = false;
+let speed = 4;
+let rewardHistory = [], stepsHistory = [];
+let trail = []; // [{r,c,alpha}]
+let animFrame = null;
+let stepsPerTick = 1;
+
+// ─── CANVAS SETUP ──────────────────────────────────────────────────────────
+const gc = document.getElementById('grid-canvas');
+const qc = document.getElementById('q-overlay');
+gc.width = qc.width = COLS * CELL;
+gc.height = qc.height = ROWS * CELL;
+const gx = gc.getContext('2d');
+const qx = qc.getContext('2d');
+
+// ─── DRAW GRID ─────────────────────────────────────────────────────────────
+function drawGrid() {
+  gx.clearRect(0, 0, gc.width, gc.height);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * CELL, y = r * CELL;
+      const t = GRID[r][c];
+      if (t === 1) {
+        gx.fillStyle = '#1a1a28';
+        gx.fillRect(x, y, CELL, CELL);
+        gx.fillStyle = '#0e0e18';
+        gx.fillRect(x+2, y+2, CELL-4, CELL-4);
+      } else if (t === 2) {
+        gx.fillStyle = '#151520';
+        gx.fillRect(x, y, CELL, CELL);
+        gx.fillStyle = 'rgba(127,255,110,0.15)';
+        gx.fillRect(x, y, CELL, CELL);
+        // goal star
+        gx.fillStyle = '#7fff6e';
+        gx.font = `${CELL*0.5}px serif`;
+        gx.textAlign = 'center';
+        gx.textBaseline = 'middle';
+        gx.fillText('★', x + CELL/2, y + CELL/2);
+      } else if (t === 3) {
+        gx.fillStyle = '#151520';
+        gx.fillRect(x, y, CELL, CELL);
+        gx.fillStyle = 'rgba(255,107,107,0.15)';
+        gx.fillRect(x, y, CELL, CELL);
+        gx.fillStyle = '#ff6b6b';
+        gx.font = `${CELL*0.45}px serif`;
+        gx.textAlign = 'center';
+        gx.textBaseline = 'middle';
+        gx.fillText('✕', x + CELL/2, y + CELL/2);
+      } else {
+        gx.fillStyle = '#111119';
+        gx.fillRect(x, y, CELL, CELL);
+      }
+      // grid line
+      gx.strokeStyle = '#1e1e2e';
+      gx.lineWidth = 1;
+      gx.strokeRect(x, y, CELL, CELL);
+    }
+  }
+}
+
+// ─── DRAW TRAIL ────────────────────────────────────────────────────────────
+function drawTrail() {
+  for (let i = 0; i < trail.length; i++) {
+    const t = trail[i];
+    const x = t.c * CELL, y = t.r * CELL;
+    gx.fillStyle = `rgba(255,209,102,${t.alpha * 0.25})`;
+    gx.fillRect(x+2, y+2, CELL-4, CELL-4);
+  }
+}
+
+// ─── DRAW AGENT ────────────────────────────────────────────────────────────
+function drawAgent() {
+  const x = agentC * CELL + CELL/2;
+  const y = agentR * CELL + CELL/2;
+  const r = CELL * 0.3;
+
+  // glow
+  const grad = gx.createRadialGradient(x, y, 0, x, y, r*2);
+  grad.addColorStop(0, 'rgba(255,209,102,0.4)');
+  grad.addColorStop(1, 'rgba(255,209,102,0)');
+  gx.fillStyle = grad;
+  gx.beginPath();
+  gx.arc(x, y, r*2, 0, Math.PI*2);
+  gx.fill();
+
+  gx.fillStyle = '#ffd166';
+  gx.beginPath();
+  gx.arc(x, y, r, 0, Math.PI*2);
+  gx.fill();
+
+  // eyes
+  gx.fillStyle = '#0a0a0f';
+  gx.beginPath(); gx.arc(x-5, y-3, 3, 0, Math.PI*2); gx.fill();
+  gx.beginPath(); gx.arc(x+5, y-3, 3, 0, Math.PI*2); gx.fill();
+}
+
+// ─── DRAW Q VALUES ─────────────────────────────────────────────────────────
+function drawQValues() {
+  qx.clearRect(0, 0, qc.width, qc.height);
+  if (episode < 5) return; // don't show at start
+  qx.font = `${CELL*0.22}px Space Mono, monospace`;
+  qx.textAlign = 'center';
+  qx.textBaseline = 'middle';
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (GRID[r][c] === 1) continue;
+      const k = qKey(r, c);
+      if (!Q[k]) continue;
+      const vals = Q[k];
+      const maxQ = Math.max(...vals);
+      if (maxQ === 0) continue;
+      const x = c * CELL, y = r * CELL;
+
+      // best action arrow
+      const best = vals.indexOf(maxQ);
+      const intensity = Math.min(1, Math.abs(maxQ) / 5);
+      qx.fillStyle = maxQ > 0
+        ? `rgba(127,255,110,${intensity * 0.9})`
+        : `rgba(255,107,107,${intensity * 0.9})`;
+      qx.font = `${CELL*0.4}px serif`;
+      qx.fillText(ACTION_NAMES[best], x + CELL/2, y + CELL/2);
+    }
+  }
+}
+
+// ─── CHART DRAWING ─────────────────────────────────────────────────────────
+function drawChart(canvasId, data, color, maxPoints = 200) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth * devicePixelRatio || 288;
+  const H = canvas.offsetHeight * devicePixelRatio || 90;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  if (data.length < 2) return;
+
+  const pts = data.slice(-maxPoints);
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const range = max - min || 1;
+
+  // gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, color + '55');
+  grad.addColorStop(1, color + '00');
+
+  ctx.beginPath();
+  pts.forEach((v, i) => {
+    const x = (i / (pts.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 10) - 5;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // fill
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // last value label
+  const last = pts[pts.length-1];
+  ctx.fillStyle = color;
+  ctx.font = `bold 10px Space Mono`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText(last.toFixed(1), W-2, 2);
+}
+
+// ─── RL LOGIC ──────────────────────────────────────────────────────────────
+function chooseAction(r, c) {
+  if (Math.random() < epsilon) {
+    // random valid actions
+    const valid = ACTIONS.map((a,i) => {
+      const nr = r+a[0], nc = c+a[1];
+      return (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&GRID[nr][nc]!==1) ? i : -1;
+    }).filter(i=>i>=0);
+    return valid[Math.floor(Math.random()*valid.length)] ?? 0;
+  }
+  // greedy
+  const qs = [0,1,2,3].map(a => {
+    const nr = r+ACTIONS[a][0], nc = c+ACTIONS[a][1];
+    if (nr<0||nr>=ROWS||nc<0||nc>=COLS||GRID[nr][nc]===1) return -Infinity;
+    return getQ(r, c, a);
+  });
+  return qs.indexOf(Math.max(...qs));
+}
+
+function step() {
+  const a = chooseAction(agentR, agentC);
+  const [dr, dc] = ACTIONS[a];
+  const nr = agentR + dr, nc = agentC + dc;
+
+  if (nr<0||nr>=ROWS||nc<0||nc>=COLS||GRID[nr][nc]===1) {
+    // hit wall, stay
+    const reward = -0.5;
+    const oldQ = getQ(agentR, agentC, a);
+    const newQ = oldQ + ALPHA * (reward - oldQ);
+    setQ(agentR, agentC, a, newQ);
+    epReward += reward;
+    stepCount++;
+    return false;
+  }
+
+  const cellType = GRID[nr][nc];
+  let reward = -0.05; // small step penalty
+  let done = false;
+
+  if (cellType === 2) { reward = 10; done = true; }
+  else if (cellType === 3) { reward = -5; done = true; }
+
+  // Q-update
+  const oldQ = getQ(agentR, agentC, a);
+  const nextMaxQ = done ? 0 : Math.max(...[0,1,2,3].map(na => getQ(nr, nc, na)));
+  const newQ = oldQ + ALPHA * (reward + GAMMA * nextMaxQ - oldQ);
+  setQ(agentR, agentC, a, newQ);
+
+  // trail
+  trail.push({r: agentR, c: agentC, alpha: 0.8});
+  if (trail.length > 12) trail.shift();
+  trail.forEach(t => t.alpha *= 0.85);
+
+  agentR = nr; agentC = nc;
+  epReward += reward;
+  stepCount++;
+  return done;
+}
+
+function endEpisode() {
+  rewardHistory.push(epReward);
+  stepsHistory.push(stepCount);
+  episode++;
+  epsilon = Math.max(EPS_MIN, epsilon * EPS_DECAY);
+  agentR = START[0]; agentC = START[1];
+  epReward = 0; stepCount = 0;
+  trail = [];
+
+  // update UI
+  updateUI();
+}
+
+function getStage() {
+  if (episode < 10) return { label: 'RANDOM EXPLORATION', color: '#ff6b6b', text: 'The agent takes <strong>random actions</strong> — it has no idea what to do yet. Every step is a new experience being recorded in the Q-table.' };
+  if (epsilon > 0.6) return { label: 'EARLY LEARNING', color: '#ffb347', text: 'Starting to form <strong>preferences</strong>. Some Q-values are non-zero. Still mostly random but patterns are emerging in the value table.' };
+  if (epsilon > 0.3) return { label: 'BUILDING KNOWLEDGE', color: '#6ec6ff', text: 'The Q-table is getting <strong>meaningful values</strong>. Watch how arrows appear showing the agent\'s growing sense of direction!' };
+  if (epsilon > 0.15) return { label: 'EXPLOITATION KICKS IN', color: '#c77dff', text: 'Now mostly using learned knowledge. You can see the agent <strong>following smarter paths</strong>. Occasionally still explores.' };
+  return { label: 'NEAR OPTIMAL', color: '#7fff6e', text: 'The agent has <strong>converged</strong>! It reliably finds a good path to the goal. The Q-table encodes a near-optimal policy.' };
+}
+
+function updateUI() {
+  const stage = getStage();
+  document.getElementById('stage-badge').textContent = stage.label;
+  document.getElementById('stage-badge').style.color = stage.color;
+  document.getElementById('stage-badge').style.borderColor = stage.color;
+  document.getElementById('concept-text').innerHTML = stage.text;
+  document.getElementById('ep-num').textContent = episode;
+  document.getElementById('step-num').textContent = stepCount;
+  document.getElementById('ep-reward').textContent = epReward.toFixed(1);
+  document.getElementById('eps-val').textContent = epsilon.toFixed(2);
+  document.getElementById('eps-big').textContent = epsilon.toFixed(2);
+  document.getElementById('epsilon-bar').style.width = (epsilon * 100) + '%';
+
+  drawChart('chart-reward', rewardHistory, '#7fff6e');
+  drawChart('chart-steps', stepsHistory, '#6ec6ff');
+
+  // thought bubble
+  const thoughts = [
+    'hmm, which way...', 'ouch, that was a wall', 'I\'ve been here before...',
+    'this path looks familiar!', 'following the gradient...', 'optimizing!',
+    'I know what to do!', 'goal is that way →', 'avoid the red ones!'
+  ];
+  const ti = Math.min(Math.floor(episode/15), thoughts.length-1);
+  document.getElementById('thought-bubble').textContent = '"' + thoughts[ti] + '"';
+}
+
+// ─── MAIN LOOP ─────────────────────────────────────────────────────────────
+let tickInterval = null;
+const MAX_STEPS = 150;
+
+function tick() {
+  if (paused || !running) return;
+  for (let s = 0; s < stepsPerTick; s++) {
+    const done = step();
+    if (done || stepCount >= MAX_STEPS) {
+      endEpisode();
+      break;
+    }
+  }
+  document.getElementById('step-num').textContent = stepCount;
+  document.getElementById('ep-reward').textContent = epReward.toFixed(1);
+  render();
+}
+
+function render() {
+  drawGrid();
+  drawTrail();
+  drawAgent();
+  drawQValues();
+}
+
+function startLoop() {
+  running = true;
+  paused = false;
+  if (tickInterval) clearInterval(tickInterval);
+  const delay = Math.max(20, 250 - speed * 22);
+  stepsPerTick = speed > 7 ? 3 : 1;
+  tickInterval = setInterval(tick, delay);
+}
+
+// ─── BUTTONS ───────────────────────────────────────────────────────────────
+document.getElementById('btn-start').onclick = () => {
+  if (!running) {
+    startLoop();
+    document.getElementById('btn-start').textContent = '▶ RUNNING';
+    document.getElementById('btn-start').classList.add('primary');
+  }
+};
+
+document.getElementById('btn-pause').onclick = () => {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? '▶ RESUME' : '⏸ PAUSE';
+};
+
+document.getElementById('btn-reset').onclick = () => {
+  if (tickInterval) clearInterval(tickInterval);
+  running = false; paused = false;
+  Q = {}; epsilon = 1.0;
+  agentR = START[0]; agentC = START[1];
+  episode = 0; stepCount = 0; epReward = 0;
+  trail = []; rewardHistory = []; stepsHistory = [];
+  document.getElementById('btn-start').textContent = '▶ START';
+  document.getElementById('stage-badge').textContent = 'NOT STARTED';
+  document.getElementById('stage-badge').style.color = '';
+  document.getElementById('stage-badge').style.borderColor = '';
+  document.getElementById('thought-bubble').textContent = 'Press START to watch the agent learn...';
+  document.getElementById('concept-text').innerHTML = 'The agent starts knowing <strong>nothing</strong>. It will take random actions and slowly build a <strong>Q-table</strong> — a lookup of "how good is action A in state S?"';
+  updateUI();
+  render();
+};
+
+document.getElementById('speed-slider').oninput = function() {
+  speed = +this.value;
+  document.getElementById('speed-label').textContent = speed + 'x';
+  if (running && !paused) startLoop();
+};
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+drawGrid();
+drawAgent();
+updateUI();
+</script>
+</body>
+</html>
