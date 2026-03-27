@@ -19,10 +19,10 @@ A collection of **interactive, visual reinforcement learning algorithm demos** b
 ---
 
 ## 🎮 Q-Learning Demo
-**`[q-learning/rl-playground.html](https://ciiphersiren.github.io/learn-to-RL/q-learning/rl-playground.html)`** — the live simulation
+**[q-learning/rl-playground.html](https://ciiphersiren.github.io/learn-to-RL/q-learning/rl-playground.html)** — the live simulation
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/12075555-25eb-440f-8941-ea70832bddfb" />
 
-**`[q-learning/rl-teach.html](https://ciiphersiren.github.io/learn-to-RL/q-learning/rl-teach.html)`** — interactive 6-chapter code walkthrough
+**[q-learning/rl-teach.html](https://ciiphersiren.github.io/learn-to-RL/q-learning/rl-teach.html)** — interactive 6-chapter code walkthrough
 <img width="1920" height="938" alt="image" src="https://github.com/user-attachments/assets/83c1e9ce-18d2-499e-b544-8bebda395324" />
 
 ### What you can see
