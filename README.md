@@ -46,7 +46,7 @@ No install. No build step. Just open the file:
 ```bash
 git clone https://github.com/your-username/rl-visualized
 cd rl-visualized/q-learning
-open rl-playground.html   # or just double-click it
+open rl-playground.html   # or just click the link given above :))
 ```
 
 Works in any modern browser (Chrome, Firefox, Safari, Edge).
